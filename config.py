@@ -1,43 +1,42 @@
-"""
-config.py — all settings pulled from environment variables.
-Never hard-code secrets here; set them in .env (local) or GitHub Secrets (CI).
-"""
+/**
+ * config.js — all settings from environment variables.
+ * Secrets go in .env (local) or GitHub Secrets (CI). Never hard-code them.
+ */
 
-import os
-from dotenv import load_dotenv
+import "dotenv/config";
 
-load_dotenv()
+function require_env(name) {
+  const val = process.env[name];
+  if (!val) throw new Error(`Missing required env var: ${name}`);
+  return val;
+}
 
-# ── Telegram MTProto (Telethon) ──────────────────────────────────────────────
-# Obtain from https://my.telegram.org/apps
-TG_API_ID   = int(os.environ["TG_API_ID"])
-TG_API_HASH = os.environ["TG_API_HASH"]
+// ── Telegram MTProto (GramJS) — for READING channels ─────────────────────────
+export const TG_API_ID        = parseInt(require_env("TG_API_ID"), 10);
+export const TG_API_HASH      = require_env("TG_API_HASH");
+export const TG_SESSION_STRING = require_env("TG_SESSION_STRING");
 
-# A pre-generated .session file string (base64) so CI doesn't need interactive login.
-# Generate locally with: python scripts/gen_session.py
-TG_SESSION_STRING = os.environ["TG_SESSION_STRING"]
+// ── Telegram Bot API — for SENDING the digest ─────────────────────────────────
+export const BOT_TOKEN      = require_env("BOT_TOKEN");
+export const TARGET_CHAT_ID = require_env("TARGET_CHAT_ID");
 
-# ── Telegram Bot (for sending) ───────────────────────────────────────────────
-BOT_TOKEN      = os.environ["BOT_TOKEN"]
-TARGET_CHAT_ID = os.environ["TARGET_CHAT_ID"]   # e.g. "@mychannel" or "-100123456789"
+// ── Source channels ───────────────────────────────────────────────────────────
+export const CHANNELS = (
+  process.env.SOURCE_CHANNELS || "@yonhap_news_kor,@kbs_news,@mbc_news_korea"
+)
+  .split(",")
+  .map((c) => c.trim())
+  .filter(Boolean);
 
-# ── Anthropic Claude ─────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+// ── Groq ──────────────────────────────────────────────────────────────────────
+export const GROQ_API_KEY   = require_env("GROQ_API_KEY");
+// llama-3.1-8b-instant: fast + generous rate limits
+// llama-3.3-70b-versatile: higher quality but lower rate limits
+export const GROQ_MODEL     = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+// Messages per Groq request — keep at 15 to stay within 40k tok/min
+export const GROQ_BATCH_SIZE = parseInt(process.env.GROQ_BATCH_SIZE || "15", 10);
 
-# ── Source channels ──────────────────────────────────────────────────────────
-# Public channel usernames or invite links (must be joined by the user account)
-CHANNELS: list[str] = [
-    ch.strip()
-    for ch in os.getenv(
-        "SOURCE_CHANNELS",
-        "@yonhap_news_kor,@kbs_news,@mbc_news_korea",
-    ).split(",")
-    if ch.strip()
-]
-
-# ── Behaviour ────────────────────────────────────────────────────────────────
-LOOKBACK_HOURS   = int(os.getenv("LOOKBACK_HOURS", "24"))
-MAX_MSGS_PER_CH  = int(os.getenv("MAX_MSGS_PER_CH", "30"))   # cap per channel
-DIGEST_TITLE     = os.getenv("DIGEST_TITLE", "Korean News Digest")
-CLAUDE_MODEL     = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-MAX_TOKENS       = int(os.getenv("MAX_TOKENS", "4096"))
+// ── Behaviour ─────────────────────────────────────────────────────────────────
+export const LOOKBACK_HOURS  = parseInt(process.env.LOOKBACK_HOURS  || "24", 10);
+export const MAX_MSGS_PER_CH = parseInt(process.env.MAX_MSGS_PER_CH || "30", 10);
+export const DIGEST_TITLE    = process.env.DIGEST_TITLE || "Korean News Digest";
