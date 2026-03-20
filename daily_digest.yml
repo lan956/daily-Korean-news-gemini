@@ -1,0 +1,40 @@
+name: Daily Korean News Digest
+
+on:
+  schedule:
+    # Runs every day at 08:00 Hanoi time (UTC+7) = 01:00 UTC
+    - cron: "0 1 * * *"
+  workflow_dispatch:       # allow manual trigger from Actions UI
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run digest bot
+        env:
+          TG_API_ID:          ${{ secrets.TG_API_ID }}
+          TG_API_HASH:        ${{ secrets.TG_API_HASH }}
+          TG_SESSION_STRING:  ${{ secrets.TG_SESSION_STRING }}
+          BOT_TOKEN:          ${{ secrets.BOT_TOKEN }}
+          TARGET_CHAT_ID:     ${{ secrets.TARGET_CHAT_ID }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          SOURCE_CHANNELS:    ${{ vars.SOURCE_CHANNELS }}
+          LOOKBACK_HOURS:     ${{ vars.LOOKBACK_HOURS }}
+          MAX_MSGS_PER_CH:    ${{ vars.MAX_MSGS_PER_CH }}
+          DIGEST_TITLE:       ${{ vars.DIGEST_TITLE }}
+          CLAUDE_MODEL:       ${{ vars.CLAUDE_MODEL }}
+        run: python main.py
