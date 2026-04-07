@@ -37,6 +37,6 @@ export const GROQ_MODEL     = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
 export const GROQ_BATCH_SIZE = parseInt(process.env.GROQ_BATCH_SIZE || "15", 10);
 
 // ── Behaviour ─────────────────────────────────────────────────────────────────
-export const LOOKBACK_HOURS  = parseInt(process.env.LOOKBACK_HOURS  || "24", 10);
+export const LOOKBACK_HOURS  = parseInt(process.env.LOOKBACK_HOURS  || "4", 10);
 export const MAX_MSGS_PER_CH = parseInt(process.env.MAX_MSGS_PER_CH || "30", 10);
 export const DIGEST_TITLE    = process.env.DIGEST_TITLE || "Korean News Digest";
