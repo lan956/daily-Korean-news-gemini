@@ -3,17 +3,20 @@
  * Pipeline:
  *   1. Translate Korean messages → English  (Google Translate)
  *   2. Deduplicate near-identical stories   (Jaccard similarity)
- *   3. Batch into groups of GROQ_BATCH_SIZE (default 15 / request)
- *   4. Summarise each batch via Groq API    (rate-limited: 30 req/min, 40k tok/min)
+ *   3. Batch into groups of GEMINI_BATCH_SIZE (default 50 / request)
+ *   4. Summarise each batch via Gemini API  (OpenAI-compatible endpoint)
  *   5. Render Telegram HTML digest
  */
 
-import Groq                         from "groq-sdk";
+import OpenAI                       from "openai";
 import { translateKoreanToEnglish } from "./translator.js";
-import { rateLimiter, RateLimiter } from "./rate_limiter.js";
-import { GROQ_API_KEY, GROQ_MODEL, GROQ_BATCH_SIZE } from "./config.js";
+import { rateLimiter }              from "./rate_limiter.js";
+import { GEMINI_API_KEY, GEMINI_MODEL, GEMINI_BATCH_SIZE } from "./config.js";
 
-const groq = new Groq({ apiKey: GROQ_API_KEY });
+const gemini = new OpenAI({
+  apiKey:  GEMINI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+});
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
@@ -52,10 +55,10 @@ function dedup(items) {
   return kept;
 }
 
-// ── Groq batch call ───────────────────────────────────────────────────────────
+// ── Gemini batch call ─────────────────────────────────────────────────────────
 
 /**
- * Summarise one batch of translated messages via Groq.
+ * Summarise one batch of translated messages via Gemini.
  * @param {Array<{ id, translated }>} batch
  * @returns {Promise<Map<number, { headline, summary }>>}
  */
@@ -63,32 +66,25 @@ async function summariseBatch(batch) {
   const payload = batch.map((item) => ({ id: item.id, text: item.translated }));
   const userMsg = JSON.stringify(payload);
 
-  // Estimate tokens: system prompt + user message + expected output
-  const estimatedInput  = RateLimiter.estimateTokens(SYSTEM_PROMPT + userMsg);
-  const estimatedOutput = batch.length * 80;   // ~80 output tokens per story
-  const estimatedTotal  = estimatedInput + estimatedOutput;
-
-  // Block here if limits are close — rate_limiter handles the sleep
-  await rateLimiter.acquire(estimatedTotal);
+  // Wait for rate limiter (RPM + RPD)
+  await rateLimiter.acquire();
 
   console.log(
-    `[summarizer] Groq request — ${batch.length} items, ~${estimatedTotal} tokens  ` +
+    `[summarizer] Gemini request — ${batch.length} items  ` +
     JSON.stringify(rateLimiter.status())
   );
 
-  const response = await groq.chat.completions.create({
-    model:       GROQ_MODEL,
+  const response = await gemini.chat.completions.create({
+    model:       GEMINI_MODEL,
     temperature: 0.3,
-    max_tokens:  estimatedOutput + 200,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user",   content: userMsg },
     ],
   });
 
-  // Correct the limiter with actual token usage
-  const actualTokens = response.usage?.total_tokens ?? estimatedTotal;
-  rateLimiter.record(actualTokens, estimatedTotal);
+  // Record the request
+  rateLimiter.record();
 
   // Parse JSON — strip accidental markdown fences
   let raw = response.choices[0]?.message?.content?.trim() ?? "[]";
@@ -133,17 +129,17 @@ export async function buildDigest(items) {
   const unique = dedup(translated);
   console.log(`[summarizer] ${unique.length} unique stories after dedup`);
 
-  // 3. Assign sequential IDs for Groq batch tracking
+  // 3. Assign sequential IDs for batch tracking
   const numbered = unique.map((item, i) => ({ ...item, id: i + 1 }));
 
-  // 4. Split into batches and summarise via Groq
+  // 4. Split into batches and summarise via Gemini
   const batches = [];
-  for (let i = 0; i < numbered.length; i += GROQ_BATCH_SIZE) {
-    batches.push(numbered.slice(i, i + GROQ_BATCH_SIZE));
+  for (let i = 0; i < numbered.length; i += GEMINI_BATCH_SIZE) {
+    batches.push(numbered.slice(i, i + GEMINI_BATCH_SIZE));
   }
 
   console.log(
-    `[summarizer] ${batches.length} batch(es) × ≤${GROQ_BATCH_SIZE} items → Groq (${GROQ_MODEL})`
+    `[summarizer] ${batches.length} batch(es) × ≤${GEMINI_BATCH_SIZE} items → Gemini (${GEMINI_MODEL})`
   );
 
   const summaryMap = new Map();

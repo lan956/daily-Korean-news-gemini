@@ -28,13 +28,11 @@ export const CHANNELS = (
   .map((c) => c.trim())
   .filter(Boolean);
 
-// ── Groq ──────────────────────────────────────────────────────────────────────
-export const GROQ_API_KEY   = require_env("GROQ_API_KEY");
-// llama-3.1-8b-instant: fast + generous rate limits
-// llama-3.3-70b-versatile: higher quality but lower rate limits
-export const GROQ_MODEL     = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
-// Messages per Groq request — keep at 15 to stay within 40k tok/min
-export const GROQ_BATCH_SIZE = parseInt(process.env.GROQ_BATCH_SIZE || "15", 10);
+// ── Gemini (via OpenAI-compatible endpoint) ───────────────────────────────────
+export const GEMINI_API_KEY   = require_env("GEMINI_API_KEY");
+export const GEMINI_MODEL     = process.env.GEMINI_MODEL || "gemini-2.5-flash-preview-04-17";
+// Large batch size is fine — Gemini has 1M context window and 250k TPM
+export const GEMINI_BATCH_SIZE = parseInt(process.env.GEMINI_BATCH_SIZE || "50", 10);
 
 // ── Behaviour ─────────────────────────────────────────────────────────────────
 export const LOOKBACK_HOURS  = parseInt(process.env.LOOKBACK_HOURS  || "4", 10);

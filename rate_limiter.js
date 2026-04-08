@@ -1,16 +1,17 @@
 /**
  * rate_limiter.js
- * Sliding-window rate limiter for Groq's API constraints:
- *   - 30 requests / minute
- *   - 40 000 tokens  / minute
+ * Sliding-window rate limiter for Gemini's free-tier API constraints:
+ *   - 5 requests / minute  (RPM)
+ *   - 20 requests / day    (RPD)
+ *   - 250 000 tokens / minute (TPM — so generous we don't need to track it)
  *
- * Call `await rateLimiter.acquire(estimatedTokens)` before every Groq request.
- * Call `rateLimiter.record(actualTokens)` after the response arrives.
+ * Call `await rateLimiter.acquire()` before every Gemini request.
+ * Call `rateLimiter.record()` after the response arrives.
  */
 
 const WINDOW_MS    = 60_000;
-const MAX_REQUESTS = 28;       // keep 2 in reserve
-const MAX_TOKENS   = 38_000;   // keep 2 000 in reserve
+const MAX_RPM      = 4;     // keep 1 in reserve (limit is 5)
+const MAX_RPD      = 18;    // keep 2 in reserve (limit is 20)
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -18,68 +19,66 @@ function sleep(ms) {
 
 class RateLimiter {
   constructor() {
-    this._windowStart = Date.now();
-    this._requests    = 0;
-    this._tokens      = 0;
+    this._windowStart  = Date.now();
+    this._dayStart     = Date.now();
+    this._requestsMin  = 0;
+    this._requestsDay  = 0;
   }
 
-  /** Rough token estimate: 1 token ≈ 4 characters */
-  static estimateTokens(text) {
-    return Math.ceil(text.length / 4);
-  }
-
-  _resetIfExpired() {
+  _resetMinuteIfExpired() {
     if (Date.now() - this._windowStart >= WINDOW_MS) {
       this._windowStart = Date.now();
-      this._requests    = 0;
-      this._tokens      = 0;
+      this._requestsMin = 0;
     }
   }
 
   /**
-   * Block until there is capacity for `estimatedTokens` tokens + 1 request.
-   * @param {number} estimatedTokens
+   * Block until there is capacity for 1 request.
    */
-  async acquire(estimatedTokens) {
-    this._resetIfExpired();
+  async acquire() {
+    this._resetMinuteIfExpired();
 
-    const requestsOk = this._requests < MAX_REQUESTS;
-    const tokensOk   = this._tokens + estimatedTokens < MAX_TOKENS;
+    // Check daily limit
+    if (this._requestsDay >= MAX_RPD) {
+      console.error(
+        `[rate_limiter] Daily request limit reached (${this._requestsDay}/${MAX_RPD}). ` +
+        `Cannot proceed — would exceed Gemini free tier RPD.`
+      );
+      throw new Error("Gemini free tier daily request limit reached");
+    }
 
-    if (!requestsOk || !tokensOk) {
+    // Check per-minute limit
+    if (this._requestsMin >= MAX_RPM) {
       const elapsed = Date.now() - this._windowStart;
-      const waitMs  = WINDOW_MS - elapsed + 500; // +500 ms safety margin
-      const reason  = !requestsOk ? "request cap" : "token cap";
+      const waitMs  = WINDOW_MS - elapsed + 1000; // +1s safety margin
       console.log(
-        `[rate_limiter] ${reason} reached (reqs=${this._requests}, tokens≈${this._tokens}) — ` +
+        `[rate_limiter] RPM cap reached (${this._requestsMin}/${MAX_RPM}) — ` +
         `waiting ${Math.ceil(waitMs / 1000)}s for window reset …`
       );
       await sleep(waitMs);
       this._windowStart = Date.now();
-      this._requests    = 0;
-      this._tokens      = 0;
+      this._requestsMin = 0;
     }
 
-    // Reserve the slot optimistically
-    this._requests += 1;
-    this._tokens   += estimatedTokens;
+    // Reserve the slot
+    this._requestsMin += 1;
+    this._requestsDay += 1;
   }
 
   /**
-   * Update token count with the actual value returned by the API.
-   * @param {number} actualTokens
-   * @param {number} estimatedTokens  — the value passed to acquire()
+   * Record that a request completed successfully.
+   * (Currently a no-op since we pre-increment in acquire, but kept for symmetry)
    */
-  record(actualTokens, estimatedTokens) {
-    this._tokens += actualTokens - estimatedTokens; // correct the estimate
+  record() {
+    // Slots already reserved in acquire()
   }
 
   status() {
-    this._resetIfExpired();
+    this._resetMinuteIfExpired();
     return {
-      requests: this._requests,
-      tokens:   this._tokens,
-      windowAgeMs: Date.now() - this._windowStart,
+      requestsThisMinute: this._requestsMin,
+      requestsToday:      this._requestsDay,
+      minuteWindowAgeMs:  Date.now() - this._windowStart,
     };
   }
 }
