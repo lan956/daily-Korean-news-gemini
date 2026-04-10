@@ -49,8 +49,15 @@ async function postPart(text, attempt = 1) {
   if (data.ok) return;
 
   if (attempt < RETRIES) {
-    console.warn(`[sender] Retry ${attempt}: ${JSON.stringify(data)}`);
-    await sleep(RETRY_DELAY);
+    let delay = RETRY_DELAY;
+    
+    // Telegram tells us exactly how long to wait on a 429
+    if (data.error_code === 429 && data.parameters && data.parameters.retry_after) {
+      delay = (data.parameters.retry_after + 1) * 1000;
+    }
+
+    console.warn(`[sender] Retry ${attempt} (waiting ${delay/1000}s): ${JSON.stringify(data)}`);
+    await sleep(delay);
     return postPart(text, attempt + 1);
   }
 
@@ -70,7 +77,7 @@ export async function sendDigest(title, digest) {
   for (let i = 0; i < parts.length; i++) {
     const suffix = parts.length > 1 ? `\n\n<i>(${i + 1}/${parts.length})</i>` : "";
     await postPart(parts[i] + suffix);
-    if (i < parts.length - 1) await sleep(1000); // flood-limit guard
+    if (i < parts.length - 1) await sleep(3000); // flood-limit guard
   }
 
   console.log("[sender] Digest sent ✓");
