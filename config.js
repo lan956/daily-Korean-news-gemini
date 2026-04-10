@@ -28,11 +28,10 @@ export const CHANNELS = (
   .map((c) => c.trim())
   .filter(Boolean);
 
-// ── Gemini (via OpenAI-compatible endpoint) ───────────────────────────────────
-export const GEMINI_API_KEY   = require_env("GEMINI_API_KEY");
-export const GEMINI_MODEL     = process.env.GEMINI_MODEL || "gemini-2.5-flash-preview-04-17";
-// Large batch size is fine — Gemini has 1M context window and 250k TPM
-export const GEMINI_BATCH_SIZE = parseInt(process.env.GEMINI_BATCH_SIZE || "50", 10);
+// ── LLM providers (handled by llm_providers.js) ──────────────────────────────
+// Provider API keys are optional — set whichever you have:
+//   GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, QWEN_API_KEY
+// At least one must be set. See llm_providers.js for details.
 
 // ── Behaviour ─────────────────────────────────────────────────────────────────
 export const LOOKBACK_HOURS  = parseInt(process.env.LOOKBACK_HOURS  || "4", 10);
