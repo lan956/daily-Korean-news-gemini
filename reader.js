@@ -20,21 +20,44 @@ function buildUrl(channel, msgId) {
   return `https://t.me/${username}/${msgId}`;
 }
 
+let _client = null;
+
+/**
+ * Initialize the Telegram client once.
+ */
+export async function initReader() {
+  if (_client) return;
+  const session = new StringSession(TG_SESSION_STRING);
+  _client = new TelegramClient(session, TG_API_ID, TG_API_HASH, {
+    connectionRetries: 3,
+  });
+  await _client.connect();
+}
+
+/**
+ * Destroy the Telegram client to kill background update loops.
+ */
+export async function destroyReader() {
+  if (_client) {
+    if (typeof _client.destroy === "function") {
+      await _client.destroy();
+    } else {
+      await _client.disconnect();
+    }
+    _client = null;
+  }
+}
+
 /**
  * @returns {Promise<Array<{ channel, messageId, date, text, url }>>}
  */
 export async function fetchRecentMessages(channel) {
-  const session = new StringSession(TG_SESSION_STRING);
-  const client  = new TelegramClient(session, TG_API_ID, TG_API_HASH, {
-    connectionRetries: 3,
-  });
-
-  await client.connect();
+  if (!_client) throw new Error("Reader not initialized. Call initReader() first.");
 
   const cutoff = Date.now() - CUTOFF_MS;
   const items  = [];
 
-  const messages = await client.getMessages(channel, { limit: MAX_MSGS_PER_CH });
+  const messages = await _client.getMessages(channel, { limit: MAX_MSGS_PER_CH });
 
   for (const msg of messages) {
     const ts = msg.date * 1000; // GramJS uses Unix seconds
@@ -51,8 +74,6 @@ export async function fetchRecentMessages(channel) {
       url:       buildUrl(channel, msg.id),
     });
   }
-
-  await client.disconnect();
 
   console.log(`[reader] ${channel}: ${items.length} messages fetched`);
   return items;

@@ -2,7 +2,7 @@
  * main.js — entry point for the Korean News Digest Bot.
  */
 
-import { fetchRecentMessages } from "./reader.js";
+import { initReader, fetchRecentMessages, destroyReader } from "./reader.js";
 import { buildDigest }         from "./summarizer.js";
 import { sendDigest }          from "./sender.js";
 import { CHANNELS, DIGEST_TITLE } from "./config.js";
@@ -11,6 +11,7 @@ async function run() {
   const runAt = new Date().toUTCString();
   console.log(`=== Korean News Digest — ${runAt} ===`);
 
+  await initReader();
   const allItems = [];
 
   for (const channel of CHANNELS) {
@@ -21,6 +22,9 @@ async function run() {
       console.error(`[main] Failed to fetch ${channel}: ${err.message}`);
     }
   }
+
+  // Fully kill GramJS to prevent background _updateLoop timeouts later
+  await destroyReader();
 
   if (allItems.length === 0) {
     console.warn("[main] No messages found — skipping digest.");
