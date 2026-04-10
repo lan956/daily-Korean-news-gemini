@@ -9,7 +9,7 @@
  */
 
 import OpenAI                       from "openai";
-import { translateKoreanToEnglish } from "./translator.js";
+import { translateToEnglish }     from "./translator.js";
 import { rateLimiter }              from "./rate_limiter.js";
 import { GEMINI_API_KEY, GEMINI_MODEL, GEMINI_BATCH_SIZE } from "./config.js";
 
@@ -21,12 +21,22 @@ const gemini = new OpenAI({
 // ── System prompt ─────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `\
-You are a news editor. You receive a JSON array of translated Korean news messages.
-Each item: { "id": number, "text": string }
+You are a professional news editor. You receive a JSON array of news messages 
+from East Asian Telegram channels (Korean, Chinese, Japanese).
+Each item: { "id": number, "original": string, "translated": string }
+
+"original" is the raw message (may be Korean, Chinese, or Japanese).
+"translated" is an automatic English translation that may be inaccurate, garbled, or incomplete.
 
 For EACH item produce:
-  - "headline": one concise English headline (≤ 12 words)
+  - "headline": one concise, accurate English headline (≤ 12 words)
   - "summary":  2–3 clear, factual English sentences covering key facts and context
+
+IMPORTANT:
+- Always cross-reference the original text with the translation.
+- If the translation is garbled or wrong, rely on the original text instead.
+- Translate any untranslated terms, names, or jargon properly.
+- Never leave romanised or transliterated foreign words in the output.
 
 Return ONLY a JSON array — no markdown, no preamble, no extra keys.
 Schema: [{ "id": number, "headline": string, "summary": string }, …]`;
@@ -75,7 +85,7 @@ function isRetryable(err) {
  * @returns {Promise<Map<number, { headline, summary }>>}
  */
 async function summariseBatch(batch) {
-  const payload = batch.map((item) => ({ id: item.id, text: item.translated }));
+  const payload = batch.map((item) => ({ id: item.id, original: item.text, translated: item.translated }));
   const userMsg = JSON.stringify(payload);
 
   let response;
@@ -166,7 +176,7 @@ export async function buildDigest(items) {
   console.log(`[summarizer] Translating ${items.length} messages …`);
   const translated = [];
   for (const item of items) {
-    const eng = await translateKoreanToEnglish(item.text);
+    const eng = await translateToEnglish(item.text);
     translated.push({ ...item, translated: eng });
   }
 

@@ -5,9 +5,9 @@
 
 import translate from "@vitalets/google-translate-api";
 
-const DELAY_MS      = 300;  // ms between requests — be polite to Google
-const MAX_RETRIES   = 3;
-const RETRY_DELAY   = 2000;
+const DELAY_MS = 300;  // ms between requests — be polite to Google
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
