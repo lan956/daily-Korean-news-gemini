@@ -57,8 +57,20 @@ function dedup(items) {
 
 // ── Gemini batch call ─────────────────────────────────────────────────────────
 
+const MAX_RETRIES    = 3;
+const INITIAL_DELAY  = 5000;   // 5 seconds
+const RETRYABLE_CODES = new Set([429, 500, 502, 503, 504]);
+
+function isRetryable(err) {
+  if (err?.status && RETRYABLE_CODES.has(err.status)) return true;
+  if (err?.code === "ECONNRESET" || err?.code === "ETIMEDOUT") return true;
+  if (err?.message?.includes("fetch failed")) return true;
+  return false;
+}
+
 /**
  * Summarise one batch of translated messages via Gemini.
+ * Retries up to MAX_RETRIES times with exponential backoff on transient errors.
  * @param {Array<{ id, translated }>} batch
  * @returns {Promise<Map<number, { headline, summary }>>}
  */
@@ -66,25 +78,58 @@ async function summariseBatch(batch) {
   const payload = batch.map((item) => ({ id: item.id, text: item.translated }));
   const userMsg = JSON.stringify(payload);
 
-  // Wait for rate limiter (RPM + RPD)
-  await rateLimiter.acquire();
+  let response;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    // Wait for rate limiter (RPM + RPD)
+    await rateLimiter.acquire();
 
-  console.log(
-    `[summarizer] Gemini request — ${batch.length} items  ` +
-    JSON.stringify(rateLimiter.status())
-  );
+    console.log(
+      `[summarizer] Gemini request (attempt ${attempt}/${MAX_RETRIES}) — ${batch.length} items  ` +
+      JSON.stringify(rateLimiter.status())
+    );
 
-  const response = await gemini.chat.completions.create({
-    model:       GEMINI_MODEL,
-    temperature: 0.3,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user",   content: userMsg },
-    ],
-  });
+    try {
+      response = await gemini.chat.completions.create({
+        model:       GEMINI_MODEL,
+        temperature: 0.3,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user",   content: userMsg },
+        ],
+      });
+      // Record the request and break out on success
+      rateLimiter.record();
+      break;
+    } catch (err) {
+      rateLimiter.record();
 
-  // Record the request
-  rateLimiter.record();
+      if (!isRetryable(err) || attempt === MAX_RETRIES) {
+        console.error(
+          `[summarizer] Gemini request failed (attempt ${attempt}/${MAX_RETRIES}, ` +
+          `status ${err?.status ?? "N/A"}): ${err.message}`
+        );
+        if (attempt === MAX_RETRIES) {
+          console.error("[summarizer] All retries exhausted — using raw translations as fallback.");
+          const fallback = new Map();
+          for (const item of batch) {
+            fallback.set(item.id, {
+              headline: item.translated.slice(0, 60),
+              summary:  item.translated,
+            });
+          }
+          return fallback;
+        }
+        throw err;
+      }
+
+      const delay = INITIAL_DELAY * Math.pow(2, attempt - 1);
+      console.warn(
+        `[summarizer] Gemini returned ${err?.status ?? "error"} — ` +
+        `retrying in ${Math.ceil(delay / 1000)}s (attempt ${attempt}/${MAX_RETRIES})`
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
 
   // Parse JSON — strip accidental markdown fences
   let raw = response.choices[0]?.message?.content?.trim() ?? "[]";
