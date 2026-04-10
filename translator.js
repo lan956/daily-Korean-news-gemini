@@ -14,14 +14,14 @@ function sleep(ms) {
 }
 
 /**
- * Translate a single Korean string to English.
+ * Translate a single string to English (auto-detects source language).
  * @param {string} text
  * @returns {Promise<string>}
  */
-export async function translateKoreanToEnglish(text) {
+export async function translateToEnglish(text) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await translate(text, { from: "ko", to: "en" });
+      const result = await translate(text, { from: "auto", to: "en" });
       await sleep(DELAY_MS);
       return result.text;
     } catch (err) {
