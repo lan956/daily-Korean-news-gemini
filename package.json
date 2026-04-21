@@ -1,7 +1,7 @@
 {
   "name": "korean-news-bot",
   "version": "1.0.0",
-  "description": "Daily Korean Telegram news digest — translated via Google Translate, sent to a personal channel.",
+  "description": "Daily Telegram news digest — translated via DeepL/Google Translate, summarised by LLM, sent to your channel.",
   "type": "module",
   "main": "main.js",
   "scripts": {
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@vitalets/google-translate-api": "8.0.0",
+    "deepl-node": "^1.14.0",
     "dotenv": "^16.4.5",
     "openai": "^4.73.0",
     "telegram": "^2.26.10",

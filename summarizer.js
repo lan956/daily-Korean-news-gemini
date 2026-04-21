@@ -8,7 +8,7 @@
  *   5. Render Telegram HTML digest
  */
 
-import { translateToEnglish }                from "./translator.js";
+import { translateToEnglish, logTranslationStats, getDeeplUsage } from "./translator.js";
 import { chatCompletion, getActiveProviders } from "./llm_providers.js";
 
 const LLM_BATCH_SIZE = parseInt(process.env.GEMINI_BATCH_SIZE || process.env.LLM_BATCH_SIZE || "50", 10);
@@ -133,6 +133,14 @@ export async function buildDigest(items) {
   for (const item of items) {
     const eng = await translateToEnglish(item.text);
     translated.push({ ...item, translated: eng });
+  }
+
+  // Translation stats
+  logTranslationStats();
+  const deeplUsage = await getDeeplUsage();
+  if (deeplUsage) {
+    const pct = ((deeplUsage.used / deeplUsage.limit) * 100).toFixed(1);
+    console.log(`[summarizer] DeepL quota: ${deeplUsage.used.toLocaleString()} / ${deeplUsage.limit.toLocaleString()} chars (${pct}% used)`);
   }
 
   // 2. Deduplicate

@@ -2,12 +2,12 @@
 
 A GitHub Actions-powered Telegram bot that:
 1. **Reads** messages from Korean Telegram news channels (via **GramJS** / MTProto)
-2. **Translates** them to English (via **@vitalets/google-translate-api** — free, no API key)
+2. **Translates** them to English (via **DeepL** free tier → **Google Translate** fallback)
 3. **Deduplicates** near-identical stories using Jaccard similarity
-4. **Summarises** each story with a headline + summary (via **Google Gemini API** — free tier)
+4. **Summarises** each story with a headline + summary (via **LLM failover**: Gemini → Groq → Cerebras → Qwen)
 5. **Sends** a clean numbered digest to your personal Telegram channel
 
-Zero paid APIs required.
+Zero paid APIs required — all providers have free tiers.
 
 ---
 
@@ -17,7 +17,7 @@ Zero paid APIs required.
 korean-news-bot/
 ├── main.js                      # Entry point
 ├── reader.js                    # GramJS: fetch messages from channels
-├── translator.js                # Google Translate wrapper (retry + rate-limit)
+├── translator.js                # DeepL → Google Translate failover
 ├── summarizer.js                # Translate → dedup → Gemini summarise → digest
 ├── rate_limiter.js              # Sliding-window limiter (5 RPM, 20 RPD)
 ├── sender.js                    # Telegram Bot API: send digest
@@ -77,6 +77,7 @@ Go to **Settings → Secrets and variables → Actions**.
 | `BOT_TOKEN` | from @BotFather |
 | `TARGET_CHAT_ID` | your channel |
 | `GEMINI_API_KEY` | from aistudio.google.com |
+| `DEEPL_API_KEY` | *(optional)* from [deepl.com/pro-api](https://www.deepl.com/pro-api) — 500K chars/month free |
 
 **Variables** (freely editable):
 
@@ -105,14 +106,14 @@ Manual trigger: **Actions → Daily Korean News Digest → Run workflow**
 Korean Telegram channels
       │  GramJS (MTProto)
       ▼
-Raw Korean messages
-      │  @vitalets/google-translate-api  (free, no key)
+Raw Korean/Chinese/Japanese messages
+      │  DeepL (500K chars/month free) → Google Translate fallback
       ▼
 Translated English messages
       │  Jaccard dedup  (drops >70% similar stories)
       ▼
 Unique stories  →  batched at 50/request
-      │  Gemini API  (rate-limited: 5 RPM, 20 RPD)
+      │  LLM failover: Gemini → Groq → Cerebras → Qwen
       ▼
 {headline, summary} per story
       │  Telegram Bot API
