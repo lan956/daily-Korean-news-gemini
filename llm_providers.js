@@ -20,7 +20,7 @@ const PROVIDER_DEFS = [
     name:    "Gemini",
     envKey:  "GEMINI_API_KEY",
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-    model:   process.env.GEMINI_MODEL || "gemini-3-flash",
+    model:   process.env.GEMINI_MODEL || "gemini-3-flash-preview",
   },
   {
     name:    "Groq",
